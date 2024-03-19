@@ -359,14 +359,17 @@ Tensor binary_cross_entropy_with_logits(const Tensor& input, const Tensor& targe
   c10::MaybeOwned<Tensor> pos_weight_maybe_owned = at::borrow_from_optional_tensor(pos_weight_opt);
   const Tensor& pos_weight = *pos_weight_maybe_owned;
 
-  Tensor loss;
+  Tensor loss = at::empty_like(input);
+  at::log_sigmoid_out(loss, input);
+
   if (pos_weight.defined()) {
       // pos_weight need to be broadcasted, thus mul(target) is not inplace.
       auto log_weight = (pos_weight - 1).mul(target).add_(1);
-      loss = (1 - target).mul_(input).sub_(log_weight.mul_(at::log_sigmoid(input)));
-  } else {
-      loss = (1 - target).mul_(input).sub_(at::log_sigmoid(input));
+      loss.mul_(log_weight);
   }
+
+  auto neg_input = (1 - target).mul_(input);
+  loss.neg_().add_(neg_input);
 
   if (weight.defined()) {
       loss.mul_(weight);
